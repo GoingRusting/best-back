@@ -1,0 +1,52 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${PG_USER:-postgres}
+      POSTGRES_PASSWORD: ${PG_PASS:-postgres}
+      POSTGRES_DB: ${PG_DB:-best_back}
+    ports:
+      - "${PG_PORT:-5433}:5432"
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - pgdata:/var/lib/postgresql/data/
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  go-gin:
+    build:
+      context: ./go-gin
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      PG_HOST: postgres
+      PG_PORT: "5432"
+      PG_USER: ${PG_USER:-postgres}
+      PG_PASS: ${PG_PASS:-postgres}
+      PG_DB: ${PG_DB:-best_back}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  ts-fastify:
+    build:
+      context: ./ts-fastify
+      dockerfile: Dockerfile
+    ports:
+      - "8081:3000"
+    environment:
+      DATABASE_URL: postgresql://${PG_USER:-postgres}:${PG_PASS:-postgres}@postgres:5432/${PG_DB:-best_back}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
